@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+import tempfile
+from os.path import expanduser
+
+home = expanduser("~")
+tempfile.mkdtemp(prefix='TDIU16', dir=home)

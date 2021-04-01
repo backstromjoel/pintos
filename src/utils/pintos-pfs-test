@@ -1,0 +1,55 @@
+#!/bin/bash -
+
+if [ "$1" = "-h" -o "$1" = "--help" ]; then
+    printf "Usage: $0 number_of_runs time_limit_in_seconds\n";
+    exit;
+fi
+
+PWD=`pwd`;
+DIR=`basename $PWD`;
+
+if [ "_$DIR" != "_userprog" ] ; then
+    printf "You must be in userprog directory\n";
+    exit;
+fi
+
+if expr $(uname -s) : 'Linux.*' > /dev/null; then
+    MAKE=make
+else
+    MAKE=gmake
+fi
+
+$MAKE
+$MAKE -C ../examples
+TIMES=$(grep TIMES ../examples/pfs.h)
+EXECS=$(grep -c '^.*exec.*pfs_reader.*$' ../examples/pfs.c)
+
+declare -i COUNT=${1:-1}
+
+TIMEOUT=${2:-180}
+
+declare -i i=0;
+
+while (( i < ${COUNT} )); do
+    
+    \rm -f messages;
+    
+    pintos -v -k --fs-disk=2 -T ${TIMEOUT} --qemu -p ../examples/pfs -a pfs -p ../examples/pfs_writer -a pfs_writer -p ../examples/pfs_reader -a pfs_reader -g messages -- -f -q run pfs
+    
+    COOL=$(grep -c '^cool$' messages)
+    HOT=$(grep -v '^cool$' messages | grep -v -c '^\0*$')
+    
+    grep -v '^cool$' messages
+
+    printf "\nSUMMARY ------------------------------------------------------\n"
+    printf "The 'messages' file have ${COOL} lines with the word 'cool'.\n"
+    printf "The 'messages' file have ${HOT} lines with other content.\n"
+    printf "pfs.c executes ${EXECS} 'pfs_reader' processes concurrently.\n"
+    printf "pfs.h contain: ${TIMES}\n"
+    printf "What should be in 'messages' when everything is correct?\n"
+    printf "%s\n" "--------------------------------------------------------------"
+
+    sleep 5
+
+    let ++i;
+done

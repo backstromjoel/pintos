@@ -1,0 +1,28 @@
+#!/bin/bash
+
+if [[ $# < 1 ]]
+then
+    echo "Run a single Pintos test."
+    echo "Please supply the name of the test to run, for example: tests/userprog/read-zero"
+    exit 1
+fi
+
+VERBOSE=""
+if [[ "$1" == "VERBOSE" ]]
+then
+    VERBOSE="VERBOSE=1"
+    shift
+fi
+
+if [[ -e build ]]
+then
+    cd build/
+fi
+
+if [[ -f $1.result ]]
+then
+    rm $1.result
+fi
+
+make $1.result $VERBOSE
+

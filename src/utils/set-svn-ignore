@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Sets ignore properties in the repository from information in
+# .cvsignore files.
+
+echo cd "$1"
+cd "$1"
+
+for file in `find . -name .cvsignore`; do
+    echo svn propset svn:ignore -F $file `dirname $file` ;
+    svn propset svn:ignore -F $file `dirname $file` ;
+done
+
+echo svn -m "Added ignore properties" commit
+svn -m "Added ignore properties" commit
+
