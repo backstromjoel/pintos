@@ -22,10 +22,15 @@ int main(void)
     length = getline(buf, 10);
     
     if (length != mystrlen(buf))
+    {
       exit(111);
+    }
 
     if (length < 1)
+    {
       break;
+    }
+
     
     write(STDOUT_FILENO, buf, length);
     write(STDOUT_FILENO, &endl, 1);

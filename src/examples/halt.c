@@ -6,9 +6,12 @@
 
 #include <syscall.h>
 
+void func(void);
+
 int
 main (void)
 {
-  halt ();
+  // exit(0)
+  halt();
   /* not reached */
 }
