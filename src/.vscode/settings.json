@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "pagedir.h": "c",
+        "flist.h": "c",
+        "stdio.h": "c"
+    }
+}

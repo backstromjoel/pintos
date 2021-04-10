@@ -30,6 +30,7 @@
  * the process subsystem. */
 void process_init(void)
 {
+   // Skapa map
 }
 
 /* This function is currently never called. As thread_exit does not
@@ -224,6 +225,11 @@ process_wait (int child_id)
 void
 process_cleanup (void)
 {
+
+
+   // TA BORT MAP
+
+
   struct thread  *cur = thread_current ();
   uint32_t       *pd  = cur->pagedir;
   int status = -1;

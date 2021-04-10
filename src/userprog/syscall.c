@@ -4,23 +4,29 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-#include "threads/init.h"
+#include "userprog/flist.h"
 
 /* header files you probably need, they are not used yet */
 #include <string.h>
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "threads/vaddr.h"
+#include "threads/init.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
 
+
+// Keeps track of open files. VARJE TRÅD SKA HÅLLA KOLL PÅ DENNA VAR FÖR SIG SEDAN!
+static struct map flist;
+
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  map_init(&flist);
 }
 
 
@@ -46,6 +52,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   int32_t* esp = (int32_t*)f->esp;
+
   
   switch ( esp[0] /* retrive syscall number */ )
   {
@@ -62,19 +69,19 @@ syscall_handler (struct intr_frame *f)
     }
 
     // /* The basic systemcalls. The ones you will implement. */
-    // SYS_HALT,                   /* Halt the operating system. */
-    // SYS_EXIT,                   /* Terminate this process. */
-    // SYS_EXEC,                   /* Start another process. */
-    // SYS_WAIT,                   /* Wait for a child process to die. */
-    // SYS_CREATE,                 /* Create a file. */
-    // SYS_REMOVE,                 /* Delete a file. */
-    // SYS_OPEN,                   /* Open a file. */
-    // SYS_FILESIZE,               /* Obtain a file's size. */
-    // SYS_READ,                   /* Read from a file. */
-    // SYS_WRITE,                  /* Write to a file. */
-    // SYS_SEEK,                   /* Change position in a file. */
-    // SYS_TELL,                   /* Report current position in a file. */
-    // SYS_CLOSE,                  /* Close a file. */
+    // SYS_HALT,    0                /* Halt the operating system. */
+    // SYS_EXIT,    1                /* Terminate this process. */
+    // SYS_EXEC,    2                /* Start another process. */
+    // SYS_WAIT,    3                /* Wait for a child process to die. */
+    // SYS_CREATE,  4                /* Create a file. */
+    // SYS_REMOVE,  5                /* Delete a file. */
+    // SYS_OPEN,    6                /* Open a file. */
+    // SYS_FILESIZE,7                /* Obtain a file's size. */
+    // SYS_READ,    8                /* Read from a file. */
+    // SYS_WRITE,   9                /* Write to a file. */
+    // SYS_SEEK,    10               /* Change position in a file. */
+    // SYS_TELL,    11               /* Report current position in a file. */
+    // SYS_CLOSE,   12               /* Close a file. */
 
     case SYS_HALT: // 0
     {
@@ -82,12 +89,66 @@ syscall_handler (struct intr_frame *f)
       power_off();
       return;
     }
+
     case SYS_EXIT: // 1
     {
       printf("Running SYS_EXIT with STATUS: %d\n", esp[1]);
       thread_exit();
       return;
     }
+
+    case SYS_CREATE: // 4
+    {
+      char* file_name = (char*)esp[1];
+      int file_size = esp[2];
+
+      printf("Creating file: %s, with size: %d\n", file_name, file_size);
+
+      f->eax = filesys_create(file_name, file_size);
+
+      return;
+    }
+
+    case SYS_REMOVE: // 5
+    {
+      char* file_name = (char*)esp[1];
+      f->eax = filesys_remove(file_name);
+      return;
+    }
+
+    case SYS_OPEN: // 6
+    {
+      struct file* file = filesys_open((char*)esp[1]);
+
+      if(file == NULL)
+      {
+        f->eax = -1;
+        return;
+      }
+
+      int fd = map_insert(&flist, file);
+      f->eax = fd;
+
+      return;
+    }
+
+    case SYS_FILESIZE: // 7
+    {
+      int fd = esp[1];
+      struct file* file = map_find(&flist, fd);
+      if(file == NULL)
+      {
+        f->eax = -1;
+        return;
+      }
+
+      int length = file_length(file);
+
+      f->eax = length;
+
+      return;
+    }
+
     case SYS_READ: // 8
     {
 
@@ -96,37 +157,118 @@ syscall_handler (struct intr_frame *f)
       int length = esp[3];
       int read = 0;
 
-      if(fd == STDIN_FILENO)
+      // To Screen
+      if(fd == STDOUT_FILENO)
       {
+        f->eax = -1;
+        return;
+      }
+
+      // From Keyboard
+      else if(fd == STDIN_FILENO)
+      {
+        // Kanske ska vänta på enter? och hantera backspace?
         for(int i = 0; i < length; i++)
         {
           buf[i] = input_getc();
 
           if(buf[i] == '\r')
             buf[i] = '\n';
-            
           putbuf(&buf[i], 1);
           read++;
         }
+      }
+
+      // From File
+      else
+      {
+        struct file* file = map_find(&flist, fd);
+        if(file == NULL)
+        {
+          f->eax = -1;
+          return;
+        }
+        read = file_read(file, buf, length);
       }
 
       f->eax = read;
 
       return;
     }
+
     case SYS_WRITE: // 9
     {
       int fd = esp[1];
       char* buf = (char*)esp[2];
       int length = esp[3];
+      int written = 0;
 
-      if(fd == STDOUT_FILENO)
+      // From Keyboard
+      if(fd == STDIN_FILENO)
+      {
+        f->eax = -1;
+        return;
+      }
+
+      // To Screen
+      else if(fd == STDOUT_FILENO)
       {
         putbuf(buf, length);
+        written = length;
       }
-      f->eax = length;
 
+      // To File
+      else
+      {
+        struct file* file = map_find(&flist, fd);
+        if(file == NULL)
+        {
+          f->eax = -1;
+          return;
+        }
+        written = file_write(file, buf, length);
+      }
+
+      f->eax = written;
+      return;
+    }
+
+    case SYS_SEEK: // 10
+    {
+      int fd = esp[1];
+      unsigned pos = esp[2];
+
+      struct file* file = map_find(&flist, fd);
+      if(file == NULL)
+      {
+        f->eax = -1;
+        return;
+      }
+      file_seek(file, pos);
+      return;
+    }
+    case SYS_TELL:
+    {
+      int fd = esp[1];
+
+      struct file* file = map_find(&flist, fd);
+      if(file == NULL)
+      {
+        f->eax = -1;
+        return;
+      }
+
+      f->eax = file_tell(file);
+      return;
+    }
+
+    case SYS_CLOSE: // 12
+    {
+      int fd = esp[1];
+      struct file* file = map_remove(&flist, fd);
+      filesys_close(file);
       return;
     }
   }
 }
+

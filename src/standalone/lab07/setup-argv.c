@@ -49,7 +49,6 @@
   gcc -m32 -Wall -Wextra -std=gnu99 -g setup-argv.c
   
 */
-#error Read comments above, then remove this line.
 
 #define true 1
 #define false 0
@@ -195,24 +194,36 @@ void* setup_main_stack(const char* command_line, void* stack_top)
   
 
   /* calculate the bytes needed to store the command_line */
-  line_size = YOUR_CODE_HERE;
+  line_size = (strlen(command_line) + 1) * sizeof(char);
+
   STACK_DEBUG("# line_size = %d\n", line_size);
 
   /* round up to make it even divisible by 4 */
-  line_size = YOUR_CODE_HERE;
+  int multiple = 4;
+  line_size = ((line_size + multiple - 1) / multiple) * multiple;
   STACK_DEBUG("# line_size (aligned) = %d\n", line_size);
 
-  /* calculate how many words the command_line contain */
-  argc = YOUR_CODE_HERE;
-  STACK_DEBUG("# argc = %d\n", argc);
 
-  /* calculate the size needed on our simulated stack */
-  total_size = YOUR_CODE_HERE;
+  char* save_ptr;
+  char* token; // Ska vara ARGV
+  argc = 0;
+  for (token = strtok_r (command_line, " ", &save_ptr); 
+       token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr))
+       {
+          /* calculate how many words the command_line contain */
+          argc++;
+       }
+      /* calculate the size needed on our simulated stack */
+      total_size = line_size + (sizeof(char*) * argc) + sizeof(char**) + sizeof(int) + sizeof(void*);
+
+  STACK_DEBUG("# argc = %d\n", argc);
   STACK_DEBUG("# total_size = %d\n", total_size);
-  
 
   /* calculate where the final stack top will be located */
-  esp = YOUR_CODE_HERE;
+  esp = FIXAAAA;
+
+  #if 0 
   
   /* setup return address and argument count */
   esp->ret = YOUR_CODE_HERE;
@@ -228,6 +239,8 @@ void* setup_main_stack(const char* command_line, void* stack_top)
   /* build argv array and insert null-characters after each word */
   
   return esp; /* the new stack top */
+
+  #endif
 }
 
 /* The C way to do constants ... */
@@ -275,3 +288,4 @@ int main()
   
   return 0;
 }
+
