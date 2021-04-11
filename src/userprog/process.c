@@ -1,6 +1,7 @@
 #include <debug.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "userprog/gdt.h"      /* SEL_* constants */
 #include "userprog/process.h"
@@ -13,6 +14,7 @@
 #include "threads/vaddr.h"     /* PHYS_BASE */
 #include "threads/interrupt.h" /* if_ */
 #include "threads/init.h"      /* power_off() */
+#include "lib/string.h"        /* strtok_r() */
 
 /* Headers not yet used that you may need for various reasons. */
 #include "threads/synch.h"
@@ -25,12 +27,15 @@
 /* HACK defines code you must remove and implement in a proper way */
 #define HACK
 
+/* Function declarations */
+void* setup_main_stack(const char* command_line, void* stack_top);
+int count_args(const char* buf, const char* delimeters);
+bool exists_in(char c, const char* d);
 
 /* This function is called at boot time (threads/init.c) to initialize
  * the process subsystem. */
 void process_init(void)
 {
-   // Skapa map
 }
 
 /* This function is currently never called. As thread_exit does not
@@ -144,13 +149,15 @@ start_process (struct parameters_to_start_process* parameters)
        allocated memory for a process stack. The stack top is in
        if_.esp, now we must prepare and place the arguments to main on
        the stack. */
+
+    if_.esp = setup_main_stack(parameters->command_line, if_.esp);
   
     /* A temporary solution is to modify the stack pointer to
        "pretend" the arguments are present on the stack. A normal
        C-function expects the stack to contain, in order, the return
        address, the first argument, the second argument etc. */
     
-    HACK if_.esp -= 12; /* Unacceptable solution. */
+    // HACK if_.esp -= 12; /* Unacceptable solution. */
 
     /* The stack and stack pointer should be setup correct just before
        the process start, so this is the place to dump stack content
@@ -225,11 +232,6 @@ process_wait (int child_id)
 void
 process_cleanup (void)
 {
-
-
-   // TA BORT MAP
-
-
   struct thread  *cur = thread_current ();
   uint32_t       *pd  = cur->pagedir;
   int status = -1;
@@ -280,3 +282,126 @@ process_activate (void)
   tss_update ();
 }
 
+struct main_args
+{
+  /* Hint: When try to interpret C-declarations, read from right to
+   * left! It is often easier to get the correct interpretation,
+   * altough it does not always work. */
+
+  /* Variable "ret" that stores address (*ret) to a function taking no
+   * parameters (void) and returning nothing. */
+  void (*ret)(void);
+
+  /* Just a normal integer. */
+  int argc;
+  
+  /* Variable "argv" that stores address to an address storing char.
+   * That is: argv is a pointer to char*
+   */
+  char** argv;
+};
+
+
+/* Return true if 'c' is fount in the c-string 'd'
+ * NOTE: 'd' must be a '\0'-terminated c-string
+ */
+bool exists_in(char c, const char* d)
+{
+  int i = 0;
+  while (d[i] != '\0' && d[i] != c)
+    ++i;
+  return (d[i] == c);
+}
+
+
+/* Return the number of words in 'buf'. A word is defined as a
+ * sequence of characters not containing any of the characters in
+ * 'delimeters'.
+ * NOTE: arguments must be '\0'-terminated c-strings
+ */
+int count_args(const char* buf, const char* delimeters)
+{
+  int i = 0;
+  bool prev_was_delim;
+  bool cur_is_delim = true;
+  int argc = 0;
+
+  while (buf[i] != '\0')
+  {
+    prev_was_delim = cur_is_delim;
+    cur_is_delim = exists_in(buf[i], delimeters);
+    argc += (prev_was_delim && !cur_is_delim);
+    ++i;
+  }
+  return argc;
+}
+
+/* Replace calls to STACK_DEBUG with calls to printf. All such calls
+ * easily removed later by replacing with nothing. */
+#define STACK_DEBUG(...) // printf(__VA_ARGS__)
+
+void* setup_main_stack(const char* command_line, void* stack_top)
+{
+  /* Variable "esp" stores an address, and at the memory loaction
+   * pointed out by that address a "struct main_args" is found.
+   * That is: "esp" is a pointer to "struct main_args" */
+  struct main_args* esp;
+  int argc;
+  int total_size;
+  int line_size;
+  // int cmdl_size;
+
+  /* "cmd_line_on_stack" and "ptr_save" are variables that each store
+   * one address, and at that address (the first) char (of a possible
+   * sequence) can be found. */
+  char* cmd_line_on_stack;
+  char* ptr_save;
+  int i = 0;
+  
+
+  /* calculate the bytes needed to store the command_line */
+  line_size = (strlen(command_line) + 1) * sizeof(char);
+
+  STACK_DEBUG("# line_size = %d\n", line_size);
+
+  /* round up to make it even divisible by 4 */
+  int multiple = 4;
+  line_size = ((line_size + multiple - 1) / multiple) * multiple;
+  STACK_DEBUG("# line_size (aligned) = %d\n", line_size);
+
+  /* calculate how many words the command_line contain */
+  argc = count_args(command_line, " \t");
+
+  /* calculate the size needed on our simulated stack */
+  total_size = line_size + (sizeof(char*) * (argc + 1)) + sizeof(char**) + sizeof(void*) * 2;
+
+  STACK_DEBUG("# argc = %d\n", argc);
+  STACK_DEBUG("# total_size = %d\n", total_size);
+
+  /* calculate where the final stack top will be located */
+  esp = (struct main_args*)((long)stack_top - total_size);
+  
+  /* setup return address and argument count */
+  esp->ret = 0; // INGEN ANING VAD DEN SKA RETURNERA
+  esp->argc = argc;
+
+  /* calculate where in the memory the argv array starts */
+  esp->argv = (char**)((long)esp + sizeof(void*) * 3);
+
+  /* calculate where in the memory the words is stored */
+  cmd_line_on_stack = (char*)((long)stack_top - line_size);
+
+  /* copy the command_line to where it should be in the stack */
+  // line_size should still be correct because one space per word is to be replaced with \0.
+  strlcpy(cmd_line_on_stack, command_line, line_size);
+
+  /* build argv array and insert null-characters after each word */
+  for(char* token = strtok_r (cmd_line_on_stack, " \t", &ptr_save); 
+      token != NULL;
+      token = strtok_r (NULL, " \t", &ptr_save))
+  {
+	  esp->argv[i++] = token;
+  }
+
+  return esp; /* the new stack top */
+}

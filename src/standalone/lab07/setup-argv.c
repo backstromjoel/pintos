@@ -17,19 +17,19 @@
   - How a C-array (pointer to many) is laid-out in memory 
   - How pointer arithmetic behaves
   - How to cast from one pointer type to another
-  - How to use printf to print good debug information
+  - How to use STACK_DEBUG to print good debug information
   - How to use a C-struct, both object and pointer to
 
   Some manual-pages of interest:
 
-  man -s3 printf
+  man -s3 STACK_DEBUG
   man -s3 strlen
   man -s3 strncpy
   man -s3 strtok_r
 
   The prototype for above functions:
   
-  int printf(const char *restrict format, ...);
+  int STACK_DEBUG(const char *restrict format, ...);
   size_t strlen(const char *s);
   size_t strncpy(char *dst, const char *src, size_t dstsize);
   char *strtok_r(char *s1, const char *s2, char **lasts);
@@ -98,28 +98,28 @@ void dump(void* ptr, int size)
   int i;
   const int S = sizeof(void*);
   
-  printf("%2$-*1$s \t%3$-*1$s \t%4$-*1$s\n", S*2, "Address", "hex-data", "char-data");
+  STACK_DEBUG("%2$-*1$s \t%3$-*1$s \t%4$-*1$s\n", S*2, "Address", "hex-data", "char-data");
   
   for (i = size - 1; i >= 0; --i)
   {
     void** adr = (void**)((unsigned long)ptr + i);
     unsigned char* byte = (unsigned char*)((unsigned long)ptr + i);
 
-    printf("%0*lx\t", S*2, (unsigned long)ptr + i); /* address */
+    STACK_DEBUG("%0*lx\t", S*2, (unsigned long)ptr + i); /* address */
       
     if ((i % S) == 0)
       /* seems we're actually forbidden to read unaligned adresses */
-      printf("%0*lx\t", S*2, (unsigned long)*adr); /* content interpreted as address */
+      STACK_DEBUG("%0*lx\t", S*2, (unsigned long)*adr); /* content interpreted as address */
     else
-      printf("%*c\t", S*2, ' '); /* fill */
+      STACK_DEBUG("%*c\t", S*2, ' '); /* fill */
         
     if(*byte >= 32 && *byte < 127)
-      printf("%c\n", *byte); /* content interpreted as character */
+      STACK_DEBUG("%c\n", *byte); /* content interpreted as character */
     else
-      printf("\\%o\n", *byte);
+      STACK_DEBUG("\\%o\n", *byte);
     
     if ((i % S) == 0)
-      printf("----------------------------------------------------------------\n");
+      STACK_DEBUG("----------------------------------------------------------------\n");
   }
 }
 
@@ -170,9 +170,9 @@ int count_args(const char* buf, const char* delimeters)
   return argc;
 }
 
-/* Replace calls to STACK_DEBUG with calls to printf. All such calls
+/* Replace calls to STACK_DEBUG with calls to STACK_DEBUG. All such calls
  * easily removed later by replacing with nothing. */
-#define STACK_DEBUG(...) printf(__VA_ARGS__)
+#define STACK_DEBUG(...) STACK_DEBUG(__VA_ARGS__)
 
 void* setup_main_stack(const char* command_line, void* stack_top)
 {
@@ -183,7 +183,7 @@ void* setup_main_stack(const char* command_line, void* stack_top)
   int argc;
   int total_size;
   int line_size;
-  int cmdl_size;
+  // int cmdl_size;
 
   /* "cmd_line_on_stack" and "ptr_save" are variables that each store
    * one address, and at that address (the first) char (of a possible
@@ -203,44 +203,41 @@ void* setup_main_stack(const char* command_line, void* stack_top)
   line_size = ((line_size + multiple - 1) / multiple) * multiple;
   STACK_DEBUG("# line_size (aligned) = %d\n", line_size);
 
+  /* calculate how many words the command_line contain */
+  argc = count_args(command_line, " \t");
 
-  char* save_ptr;
-  char* token; // Ska vara ARGV
-  argc = 0;
-  for (token = strtok_r (command_line, " ", &save_ptr); 
-       token != NULL;
-       token = strtok_r (NULL, " ", &save_ptr))
-       {
-          /* calculate how many words the command_line contain */
-          argc++;
-       }
-      /* calculate the size needed on our simulated stack */
-      total_size = line_size + (sizeof(char*) * argc) + sizeof(char**) + sizeof(int) + sizeof(void*);
+  /* calculate the size needed on our simulated stack */
+  total_size = line_size + (sizeof(char*) * (argc + 1)) + sizeof(char**) + sizeof(void*) * 2;
 
   STACK_DEBUG("# argc = %d\n", argc);
   STACK_DEBUG("# total_size = %d\n", total_size);
 
   /* calculate where the final stack top will be located */
-  esp = FIXAAAA;
-
-  #if 0 
+  esp = (struct main_args*)((long)stack_top - total_size);
   
   /* setup return address and argument count */
-  esp->ret = YOUR_CODE_HERE;
-  esp->argc = YOUR_CODE_HERE;
+  esp->ret = 0; // INGEN ANING VAD DEN SKA RETURNERA
+  esp->argc = argc;
+
   /* calculate where in the memory the argv array starts */
-  esp->argv = YOUR_CODE_HERE;
-  
+  esp->argv = (char**)((long)esp + sizeof(void*) * 3);
+
   /* calculate where in the memory the words is stored */
-  cmd_line_on_stack = YOUR_CODE_HERE;
+  cmd_line_on_stack = (char*)((long)stack_top - line_size);
 
   /* copy the command_line to where it should be in the stack */
+  // line_size should still be correct because one space per word is to be replaced with \0.
+  strncpy(cmd_line_on_stack, command_line, line_size);
 
   /* build argv array and insert null-characters after each word */
-  
-  return esp; /* the new stack top */
+  for(char* token = strtok_r (cmd_line_on_stack, " \t", &ptr_save); 
+      token != NULL;
+      token = strtok_r (NULL, " \t", &ptr_save))
+  {
+	  esp->argv[i++] = token;
+  }
 
-  #endif
+  return esp; /* the new stack top */
 }
 
 /* The C way to do constants ... */
@@ -256,17 +253,17 @@ int main()
   const int S = sizeof(void*);
   
   /* read one line of input, this will be the command-line */
-  printf("Enter a command line: ");
+  STACK_DEBUG("Enter a command line: ");
   custom_getline(line, LINE_SIZE);
   
   /* put initial content on our simulated stack */
   esp = setup_main_stack(line, simulated_stack_top);
-  printf("# esp = %0*lx\n", 2*S, (unsigned long)esp);
+  STACK_DEBUG("# esp = %0*lx\n", 2*S, (unsigned long)esp);
 
   if ( (char*)esp >= (char*)simulated_stack_top ||
        (char*)esp < (char*)simulated_stack )
   {
-    printf("# ERROR: esp is not inside the allocated stack\n");
+    STACK_DEBUG("# ERROR: esp is not inside the allocated stack\n");
     return 1;
   }
   
@@ -280,9 +277,9 @@ int main()
   /* print the argument vector to see if it worked */
   for (i = 0; i < esp->argc; ++i)
   {
-    printf("argv[%d] = %s\n", i, esp->argv[i]);
+    STACK_DEBUG("argv[%d] = %s\n", i, esp->argv[i]);
   }
-  printf("argv[%d] = %p\n", i, esp->argv[i]);
+  STACK_DEBUG("argv[%d] = %p\n", i, esp->argv[i]);
 
   free(simulated_stack);
   
