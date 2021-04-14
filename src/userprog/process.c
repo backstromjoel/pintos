@@ -104,12 +104,18 @@ process_execute (const char *command_line)
                              (thread_func*)start_process, &arguments);
 
   if (thread_id == TID_ERROR)
+  {
     process_id = -1;
+    // We must return even if thread_create fails
+    sema_up(arguments.sema);
+  }
   else
     process_id = thread_id;
 
-  // Här ska vi vänta på att start_process (nästan) är klar.
   sema_down(arguments.sema);
+
+  // Här ska vi vänta på att start_process (nästan) är klar.
+
 
   if(arguments.status != 0)
     process_id = -1;
