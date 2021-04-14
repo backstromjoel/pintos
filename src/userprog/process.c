@@ -115,8 +115,7 @@ process_execute (const char *command_line)
   sema_down(arguments.sema);
 
   // Här ska vi vänta på att start_process (nästan) är klar.
-
-
+  
   if(arguments.status != 0)
     process_id = -1;
 

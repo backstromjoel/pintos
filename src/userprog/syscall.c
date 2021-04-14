@@ -19,14 +19,10 @@
 static void syscall_handler (struct intr_frame *);
 
 
-// Keeps track of open files. VARJE TRÅD SKA HÅLLA KOLL PÅ DENNA VAR FÖR SIG SEDAN!
-static struct map flist;
-
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  map_init(&flist);
 }
 
 
@@ -126,7 +122,7 @@ syscall_handler (struct intr_frame *f)
         return;
       }
 
-      int fd = map_insert(&flist, file);
+      int fd = map_insert(&(thread_current()->fmap), file);
       f->eax = fd;
 
       return;
@@ -135,7 +131,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_FILESIZE: // 7
     {
       int fd = esp[1];
-      struct file* file = map_find(&flist, fd);
+      struct file* file = map_find(&(thread_current()->fmap), fd);
       if(file == NULL)
       {
         f->eax = -1;
@@ -182,7 +178,7 @@ syscall_handler (struct intr_frame *f)
       // From File
       else
       {
-        struct file* file = map_find(&flist, fd);
+        struct file* file = map_find(&(thread_current()->fmap), fd);
         if(file == NULL)
         {
           f->eax = -1;
@@ -220,7 +216,7 @@ syscall_handler (struct intr_frame *f)
       // To File
       else
       {
-        struct file* file = map_find(&flist, fd);
+        struct file* file = map_find(&(thread_current()->fmap), fd);
         if(file == NULL)
         {
           f->eax = -1;
@@ -238,7 +234,7 @@ syscall_handler (struct intr_frame *f)
       int fd = esp[1];
       unsigned pos = esp[2];
 
-      struct file* file = map_find(&flist, fd);
+      struct file* file = map_find(&(thread_current()->fmap), fd);
       if(file == NULL)
       {
         f->eax = -1;
@@ -251,7 +247,7 @@ syscall_handler (struct intr_frame *f)
     {
       int fd = esp[1];
 
-      struct file* file = map_find(&flist, fd);
+      struct file* file = map_find(&(thread_current()->fmap), fd);
       if(file == NULL)
       {
         f->eax = -1;
@@ -265,7 +261,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_CLOSE: // 12
     {
       int fd = esp[1];
-      struct file* file = map_remove(&flist, fd);
+      struct file* file = map_remove(&(thread_current()->fmap), fd);
       filesys_close(file);
       return;
     }
