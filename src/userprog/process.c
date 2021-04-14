@@ -57,6 +57,10 @@ void process_print_list()
 struct parameters_to_start_process
 {
   char* command_line;
+  // start_process needs access to semaphore.
+  struct semaphore* sema;
+  // status keeps track of start_process return value.
+  int status;
 };
 
 static void
@@ -88,6 +92,10 @@ process_execute (const char *command_line)
   arguments.command_line = malloc(command_line_size);
   strlcpy(arguments.command_line, command_line, command_line_size);
 
+  // Add semaphore to arguments
+  struct semaphore sema;
+  sema_init(&sema, 0);
+  arguments.sema = &sema;
 
   strlcpy_first_word (debug_name, command_line, 64);
   
@@ -95,10 +103,19 @@ process_execute (const char *command_line)
   thread_id = thread_create (debug_name, PRI_DEFAULT,
                              (thread_func*)start_process, &arguments);
 
-  process_id = thread_id;
+  if (thread_id == TID_ERROR)
+    process_id = -1;
+  else
+    process_id = thread_id;
+
+  // Här ska vi vänta på att start_process (nästan) är klar.
+  sema_down(arguments.sema);
+
+  if(arguments.status != 0)
+    process_id = -1;
 
   /* AVOID bad stuff by turning off. YOU will fix this! */
-  power_off();
+  // power_off();
   
   
   /* WHICH thread may still be using this right now? */
@@ -150,20 +167,20 @@ start_process (struct parameters_to_start_process* parameters)
        if_.esp, now we must prepare and place the arguments to main on
        the stack. */
 
-    if_.esp = setup_main_stack(parameters->command_line, if_.esp);
-  
-    /* A temporary solution is to modify the stack pointer to
-       "pretend" the arguments are present on the stack. A normal
-       C-function expects the stack to contain, in order, the return
-       address, the first argument, the second argument etc. */
-    
-    // HACK if_.esp -= 12; /* Unacceptable solution. */
+    parameters->status = 0;
 
+    if_.esp = setup_main_stack(parameters->command_line, if_.esp);
+
+    // Kanske göra något innan vi tillåter process_execute att fortsätta?
+
+    // Tillåt process_execute att fortsätta
+    sema_up(parameters->sema);
+  
     /* The stack and stack pointer should be setup correct just before
        the process start, so this is the place to dump stack content
        for debug purposes. Disable the dump when it works. */
     
-//    dump_stack ( PHYS_BASE + 15, PHYS_BASE - if_.esp + 16 );
+    // dump_stack ( PHYS_BASE + 15, PHYS_BASE - if_.esp + 16 );
 
   }
 
@@ -181,6 +198,8 @@ start_process (struct parameters_to_start_process* parameters)
   */
   if ( ! success )
   {
+    parameters->status = -1;
+    sema_up(parameters->sema);
     thread_exit ();
   }
   
