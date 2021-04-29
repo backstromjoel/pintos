@@ -17,19 +17,19 @@
   - How a C-array (pointer to many) is laid-out in memory 
   - How pointer arithmetic behaves
   - How to cast from one pointer type to another
-  - How to use STACK_DEBUG to print good debug information
+  - How to use printf to print good debug information
   - How to use a C-struct, both object and pointer to
 
   Some manual-pages of interest:
 
-  man -s3 STACK_DEBUG
+  man -s3 printf
   man -s3 strlen
   man -s3 strncpy
   man -s3 strtok_r
 
   The prototype for above functions:
   
-  int STACK_DEBUG(const char *restrict format, ...);
+  int printf(const char *restrict format, ...);
   size_t strlen(const char *s);
   size_t strncpy(char *dst, const char *src, size_t dstsize);
   char *strtok_r(char *s1, const char *s2, char **lasts);
@@ -98,28 +98,28 @@ void dump(void* ptr, int size)
   int i;
   const int S = sizeof(void*);
   
-  STACK_DEBUG("%2$-*1$s \t%3$-*1$s \t%4$-*1$s\n", S*2, "Address", "hex-data", "char-data");
+  printf("%2$-*1$s \t%3$-*1$s \t%4$-*1$s\n", S*2, "Address", "hex-data", "char-data");
   
   for (i = size - 1; i >= 0; --i)
   {
     void** adr = (void**)((unsigned long)ptr + i);
     unsigned char* byte = (unsigned char*)((unsigned long)ptr + i);
 
-    STACK_DEBUG("%0*lx\t", S*2, (unsigned long)ptr + i); /* address */
+    printf("%0*lx\t", S*2, (unsigned long)ptr + i); /* address */
       
     if ((i % S) == 0)
       /* seems we're actually forbidden to read unaligned adresses */
-      STACK_DEBUG("%0*lx\t", S*2, (unsigned long)*adr); /* content interpreted as address */
+      printf("%0*lx\t", S*2, (unsigned long)*adr); /* content interpreted as address */
     else
-      STACK_DEBUG("%*c\t", S*2, ' '); /* fill */
+      printf("%*c\t", S*2, ' '); /* fill */
         
     if(*byte >= 32 && *byte < 127)
-      STACK_DEBUG("%c\n", *byte); /* content interpreted as character */
+      printf("%c\n", *byte); /* content interpreted as character */
     else
-      STACK_DEBUG("\\%o\n", *byte);
+      printf("\\%o\n", *byte);
     
     if ((i % S) == 0)
-      STACK_DEBUG("----------------------------------------------------------------\n");
+      printf("----------------------------------------------------------------\n");
   }
 }
 
@@ -170,9 +170,9 @@ int count_args(const char* buf, const char* delimeters)
   return argc;
 }
 
-/* Replace calls to STACK_DEBUG with calls to STACK_DEBUG. All such calls
+/* Replace calls to STACK_DEBUG with calls to printf. All such calls
  * easily removed later by replacing with nothing. */
-#define STACK_DEBUG(...) STACK_DEBUG(__VA_ARGS__)
+#define STACK_DEBUG(...) printf(__VA_ARGS__)
 
 void* setup_main_stack(const char* command_line, void* stack_top)
 {
@@ -253,17 +253,17 @@ int main()
   const int S = sizeof(void*);
   
   /* read one line of input, this will be the command-line */
-  STACK_DEBUG("Enter a command line: ");
+  printf("Enter a command line: ");
   custom_getline(line, LINE_SIZE);
   
   /* put initial content on our simulated stack */
   esp = setup_main_stack(line, simulated_stack_top);
-  STACK_DEBUG("# esp = %0*lx\n", 2*S, (unsigned long)esp);
+  printf("# esp = %0*lx\n", 2*S, (unsigned long)esp);
 
   if ( (char*)esp >= (char*)simulated_stack_top ||
        (char*)esp < (char*)simulated_stack )
   {
-    STACK_DEBUG("# ERROR: esp is not inside the allocated stack\n");
+    printf("# ERROR: esp is not inside the allocated stack\n");
     return 1;
   }
   
@@ -277,9 +277,9 @@ int main()
   /* print the argument vector to see if it worked */
   for (i = 0; i < esp->argc; ++i)
   {
-    STACK_DEBUG("argv[%d] = %s\n", i, esp->argv[i]);
+    printf("argv[%d] = %s\n", i, esp->argv[i]);
   }
-  STACK_DEBUG("argv[%d] = %p\n", i, esp->argv[i]);
+  printf("argv[%d] = %p\n", i, esp->argv[i]);
 
   free(simulated_stack);
   

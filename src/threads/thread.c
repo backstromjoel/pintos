@@ -96,6 +96,7 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 
   DEBUG_thread_init();
+
 }
 
 /* Does basic initialization of a newly created thread T as a blocked
@@ -115,6 +116,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   /* YES! You may want add stuff here. */
+  map_init(&(t->fmap));
+  t->pid = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -384,7 +387,7 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by

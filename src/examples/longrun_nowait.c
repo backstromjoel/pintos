@@ -81,10 +81,12 @@ int main(int argc, char* argv[])
     int ticks = 10 * 1000 * 1000 * j / repeat;
     
     snprintf(cmd, BUF_SIZE, "generic_parent %s %i %i", "dummy", j*simul, simul);
-    
+
+    printf("RUNNING EXEC \n");
     exec(cmd);
-    
-//    plist();
+
+    printf("PRINTING PLIST \n");
+    plist();
 
     /* since we do not have the wait systemcall yet */
     printf("Now entering busy-loop to let some processes finish\n");

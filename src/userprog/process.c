@@ -32,10 +32,12 @@ void* setup_main_stack(const char* command_line, void* stack_top);
 int count_args(const char* buf, const char* delimeters);
 bool exists_in(char c, const char* d);
 
+
 /* This function is called at boot time (threads/init.c) to initialize
  * the process subsystem. */
 void process_init(void)
 {
+  plist_init(&plist);
 }
 
 /* This function is currently never called. As thread_exit does not
@@ -47,20 +49,17 @@ void process_exit(int status UNUSED)
 {
 }
 
-/* Print a list of all running processes. The list shall include all
- * relevant debug information in a clean, readable format. */
-void process_print_list()
-{
-}
-
-
 struct parameters_to_start_process
 {
   char* command_line;
   // start_process needs access to semaphore.
   struct semaphore* sema;
   // status keeps track of start_process return value.
-  int status;
+  bool status;
+  // Process id of newly started process.
+  pid_t pid;
+  // Process id of parent.
+  pid_t parent_pid;
 };
 
 static void
@@ -82,6 +81,8 @@ process_execute (const char *command_line)
 
   /* LOCAL variable will cease existence when function return! */
   struct parameters_to_start_process arguments;
+
+  arguments.parent_pid = thread_current()->pid;
 
   debug("%s#%d: process_execute(\"%s\") ENTERED\n",
         thread_current()->name,
@@ -105,23 +106,17 @@ process_execute (const char *command_line)
 
   if (thread_id == TID_ERROR)
   {
-    process_id = -1;
     // We must return even if thread_create fails
-    sema_up(arguments.sema);
+    return -1;
   }
-  else
-    process_id = thread_id;
-
-  sema_down(arguments.sema);
 
   // Här ska vi vänta på att start_process (nästan) är klar.
-  
-  if(arguments.status != 0)
-    process_id = -1;
+  sema_down(arguments.sema);
 
-  /* AVOID bad stuff by turning off. YOU will fix this! */
-  // power_off();
-  
+  if(!arguments.status)
+    process_id = -1;
+  else
+    process_id = arguments.pid;
   
   /* WHICH thread may still be using this right now? */
   free(arguments.command_line);
@@ -131,7 +126,6 @@ process_execute (const char *command_line)
         thread_current()->tid,
         command_line, process_id);
 
-  /* MUST be -1 if `load' in `start_process' return false */
   return process_id;
 }
 
@@ -172,28 +166,28 @@ start_process (struct parameters_to_start_process* parameters)
        if_.esp, now we must prepare and place the arguments to main on
        the stack. */
 
-    parameters->status = 0;
-
     if_.esp = setup_main_stack(parameters->command_line, if_.esp);
 
-    // Kanske göra något innan vi tillåter process_execute att fortsätta?
+    pinfo process_info = (pinfo)malloc(sizeof(struct process_information));
+    // Name blir någon jättekopnstigt/ingenting alls
+    process_info->name = file_name;
+    process_info->parent = parameters->parent_pid;
+    process_info->exit_status = 0;
 
-    // Tillåt process_execute att fortsätta
-    sema_up(parameters->sema);
-  
-    /* The stack and stack pointer should be setup correct just before
-       the process start, so this is the place to dump stack content
-       for debug purposes. Disable the dump when it works. */
-    
-    // dump_stack ( PHYS_BASE + 15, PHYS_BASE - if_.esp + 16 );
-
+    parameters->pid = plist_insert(&plist, process_info);
+    thread_current()->pid = parameters->pid;
   }
+
+
 
   debug("%s#%d: start_process(\"%s\") DONE\n",
         thread_current()->name,
         thread_current()->tid,
         parameters->command_line);
   
+  // Tillåt process_execute att fortsätta och returnera hur det gick
+  parameters->status = success;
+  sema_up(parameters->sema);
   
   /* If load fail, quit. Load may fail for several reasons.
      Some simple examples:
@@ -202,11 +196,7 @@ start_process (struct parameters_to_start_process* parameters)
      - Not enough memory
   */
   if ( ! success )
-  {
-    parameters->status = -1;
-    sema_up(parameters->sema);
     thread_exit ();
-  }
   
   /* Start the user process by simulating a return from an interrupt,
      implemented by intr_exit (in threads/intr-stubs.S). Because
@@ -215,6 +205,7 @@ start_process (struct parameters_to_start_process* parameters)
      our stack frame and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+  
 }
 
 /* Wait for process `child_id' to die and then return its exit
@@ -252,7 +243,6 @@ process_wait (int child_id)
    or initialized to something sane, or else that any such situation
    is detected.
 */
-  
 void
 process_cleanup (void)
 {
@@ -274,18 +264,22 @@ process_cleanup (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   if (pd != NULL) 
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-      cur->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }  
+  {
+    /* Correct ordering here is crucial.  We must set
+        cur->pagedir to NULL before switching page directories,
+        so that a timer interrupt can't switch back to the
+        process page directory.  We must activate the base page
+        directory before destroying the process's page
+        directory, or our active page directory will be one
+        that's been freed (and cleared). */
+    cur->pagedir = NULL;
+    pagedir_activate (NULL);
+    pagedir_destroy (pd);
+  }
+
+  // Remove everything remaining in map if thread dies.
+  map_remove_all(&(thread_current()->fmap));
+
   debug("%s#%d: process_cleanup() DONE with status %d\n",
         cur->name, cur->tid, status);
 }
@@ -406,7 +400,7 @@ void* setup_main_stack(const char* command_line, void* stack_top)
   esp = (struct main_args*)((long)stack_top - total_size);
   
   /* setup return address and argument count */
-  esp->ret = 0; // INGEN ANING VAD DEN SKA RETURNERA
+  esp->ret = 0;
   esp->argc = argc;
 
   /* calculate where in the memory the argv array starts */

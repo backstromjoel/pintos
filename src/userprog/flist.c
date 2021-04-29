@@ -98,3 +98,18 @@ void map_remove_if(struct map* this, bool (*cond)(key_t, value_t, int aux), int 
         }
     }
 }
+
+/* function passed as parameter to map_remove_if in order to free the
+ * memory for all inseted values, and return true to remove them from
+ * the map */
+static bool do_free(key_t k UNUSED, value_t v, int aux UNUSED)
+{
+  free(v);     /*! free memory */
+  return true; /*  and remove from collection */
+}
+
+// Removes everything that remains in map
+void map_remove_all(struct map* this)
+{
+    map_remove_if(this, do_free, 0);
+}

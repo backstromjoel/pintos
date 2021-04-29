@@ -64,21 +64,6 @@ syscall_handler (struct intr_frame *f)
       thread_exit ();
     }
 
-    // /* The basic systemcalls. The ones you will implement. */
-    // SYS_HALT,    0                /* Halt the operating system. */
-    // SYS_EXIT,    1                /* Terminate this process. */
-    // SYS_EXEC,    2                /* Start another process. */
-    // SYS_WAIT,    3                /* Wait for a child process to die. */
-    // SYS_CREATE,  4                /* Create a file. */
-    // SYS_REMOVE,  5                /* Delete a file. */
-    // SYS_OPEN,    6                /* Open a file. */
-    // SYS_FILESIZE,7                /* Obtain a file's size. */
-    // SYS_READ,    8                /* Read from a file. */
-    // SYS_WRITE,   9                /* Write to a file. */
-    // SYS_SEEK,    10               /* Change position in a file. */
-    // SYS_TELL,    11               /* Report current position in a file. */
-    // SYS_CLOSE,   12               /* Close a file. */
-
     case SYS_HALT: // 0
     {
       printf("Running SYS_HALT\n");
@@ -90,6 +75,17 @@ syscall_handler (struct intr_frame *f)
     {
       printf("Running SYS_EXIT with STATUS: %d\n", esp[1]);
       thread_exit();
+      return;
+    }
+
+    case SYS_EXEC: // 2
+    {
+      process_execute((char*)esp[1]);
+      return;
+    }
+
+    case SYS_WAIT: // 3
+    {
       return;
     }
 
@@ -263,6 +259,17 @@ syscall_handler (struct intr_frame *f)
       int fd = esp[1];
       struct file* file = map_remove(&(thread_current()->fmap), fd);
       filesys_close(file);
+      return;
+    }
+
+    case SYS_PLIST: // 13
+    {
+      plist_printf(&plist);
+      return;
+    }
+
+    case SYS_SLEEP: // 13
+    {
       return;
     }
   }

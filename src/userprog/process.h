@@ -2,6 +2,18 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "userprog/plist.h"
+
+/* Global list of all proccesses */
+struct plist plist;
+/*
+Plist ska ha t.ex.:
+Name
+Process ID
+Parent
+Parent Status ?
+Exit Code
+*/
 
 void process_init (void);
 void process_print_list (void);

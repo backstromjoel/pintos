@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "userprog/flist.h"
+#include "userprog/plist.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -95,6 +96,12 @@ struct thread
     struct list_elem elem;              /* List element. */
 
     /* YES! You may want to add stuff. But make note of point 2 above. */
+    // Map to keep track of what files are open.
+    // Removed in process cleanup.
+    struct map fmap;
+
+    pid_t pid;
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
