@@ -169,8 +169,8 @@ start_process (struct parameters_to_start_process* parameters)
     if_.esp = setup_main_stack(parameters->command_line, if_.esp);
 
     pinfo process_info = (pinfo)malloc(sizeof(struct process_information));
-    // Name blir någon jättekopnstigt/ingenting alls
-    process_info->name = file_name;
+    process_info->name = (char*)malloc(sizeof(file_name));
+    strlcpy(process_info->name, file_name, sizeof(file_name));
     process_info->parent = parameters->parent_pid;
     process_info->exit_status = 0;
 
@@ -367,7 +367,6 @@ void* setup_main_stack(const char* command_line, void* stack_top)
   int argc;
   int total_size;
   int line_size;
-  // int cmdl_size;
 
   /* "cmd_line_on_stack" and "ptr_save" are variables that each store
    * one address, and at that address (the first) char (of a possible
