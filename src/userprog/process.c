@@ -94,6 +94,7 @@ process_execute (const char *command_line)
   strlcpy(arguments.command_line, command_line, command_line_size);
 
   // Add semaphore to arguments
+  // Semaforer räknar lediga resurser
   struct semaphore sema;
   sema_init(&sema, 0);
   arguments.sema = &sema;
@@ -158,7 +159,13 @@ start_process (struct parameters_to_start_process* parameters)
         thread_current()->name,
         thread_current()->tid,
         success);
-  
+
+  pinfo process_info = (pinfo)malloc(sizeof(struct process_information));
+  process_info->name = (char*)malloc(sizeof(file_name));
+  strlcpy(process_info->name, file_name, sizeof(file_name));
+  process_info->parent = parameters->parent_pid;
+  process_info->exit_status = -1;
+
   if (success)
   {
     /* We managed to load the new program to a process, and have
@@ -168,17 +175,11 @@ start_process (struct parameters_to_start_process* parameters)
 
     if_.esp = setup_main_stack(parameters->command_line, if_.esp);
 
-    pinfo process_info = (pinfo)malloc(sizeof(struct process_information));
-    process_info->name = (char*)malloc(sizeof(file_name));
-    strlcpy(process_info->name, file_name, sizeof(file_name));
-    process_info->parent = parameters->parent_pid;
     process_info->exit_status = 0;
-
-    parameters->pid = plist_insert(&plist, process_info);
-    thread_current()->pid = parameters->pid;
   }
 
-
+  parameters->pid = plist_insert(&plist, process_info);
+  thread_current()->pid = parameters->pid;
 
   debug("%s#%d: start_process(\"%s\") DONE\n",
         thread_current()->name,
@@ -197,7 +198,6 @@ start_process (struct parameters_to_start_process* parameters)
   */
   if ( ! success )
     thread_exit ();
-  
   /* Start the user process by simulating a return from an interrupt,
      implemented by intr_exit (in threads/intr-stubs.S). Because
      intr_exit takes all of its arguments on the stack in the form of
@@ -226,6 +226,14 @@ process_wait (int child_id)
   debug("%s#%d: process_wait(%d) ENTERED\n",
         cur->name, cur->tid, child_id);
   /* Yes! You need to do something good here ! */
+  pinfo process = plist_find(&plist, child_id);
+  
+  // Wait for child to finish
+  if(process != NULL)
+    sema_down(&process->wait_sema);
+
+  status = process->exit_status;
+
   debug("%s#%d: process_wait(%d) RETURNS %d\n",
         cur->name, cur->tid, child_id, status);
   
@@ -259,6 +267,9 @@ process_cleanup (void)
    * that may sometimes poweroff as soon as process_wait() returns,
    * possibly before the printf is completed.)
    */
+  pinfo this_process = plist_find(&plist, cur->pid);
+  status = this_process->exit_status;
+
   printf("%s: exit(%d)\n", thread_name(), status);
   
   /* Destroy the current process's page directory and switch back
@@ -278,7 +289,15 @@ process_cleanup (void)
   }
 
   // Remove everything remaining in map if thread dies.
-  map_remove_all(&(thread_current()->fmap));
+  map_remove_all(&thread_current()->fmap);
+
+  if(this_process != NULL)
+  {
+    sema_up(&this_process->wait_sema);
+    // Ta bort efter delad data är färdig använd
+    // plist_remove(&plist, cur->pid);
+  }
+  
 
   debug("%s#%d: process_cleanup() DONE with status %d\n",
         cur->name, cur->tid, status);

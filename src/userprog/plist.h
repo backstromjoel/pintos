@@ -35,6 +35,7 @@
 #include <string.h>
 #include "threads/malloc.h"
 #include "../lib/kernel/list.h"
+#include "threads/synch.h"
 
 struct process_information;
 
@@ -46,6 +47,7 @@ struct process_information
   char* name;
   pid_t parent;
   int exit_status;
+  struct semaphore wait_sema;
 };
 
 struct p_association

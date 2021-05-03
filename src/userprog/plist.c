@@ -13,6 +13,7 @@ void plist_init(struct plist* this)
 pid_t plist_insert(struct plist* this, const pinfo value)
 {
     struct p_association* new_p_association = (struct p_association*)malloc(sizeof(struct p_association));
+    sema_init(&value->wait_sema, 0);
     new_p_association->value = value;
     new_p_association->key = this->next_key++;
     

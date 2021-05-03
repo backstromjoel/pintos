@@ -66,26 +66,26 @@ syscall_handler (struct intr_frame *f)
 
     case SYS_HALT: // 0
     {
-      printf("Running SYS_HALT\n");
       power_off();
       return;
     }
 
     case SYS_EXIT: // 1
     {
-      printf("Running SYS_EXIT with STATUS: %d\n", esp[1]);
+      f->eax = esp[1];
       thread_exit();
       return;
     }
 
     case SYS_EXEC: // 2
     {
-      process_execute((char*)esp[1]);
+      f->eax = process_execute((char*)esp[1]);
       return;
     }
 
     case SYS_WAIT: // 3
     {
+      f->eax = process_wait(esp[1]);
       return;
     }
 
@@ -268,10 +268,10 @@ syscall_handler (struct intr_frame *f)
       return;
     }
 
-    case SYS_SLEEP: // 13
-    {
-      return;
-    }
+    // case SYS_SLEEP: // 13
+    // {
+    //   return;
+    // }
   }
 }
 
