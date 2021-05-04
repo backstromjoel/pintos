@@ -14,8 +14,11 @@ pid_t plist_insert(struct plist* this, const pinfo value)
 {
     struct p_association* new_p_association = (struct p_association*)malloc(sizeof(struct p_association));
     sema_init(&value->wait_sema, 0);
+    value->exited = false;
+    value->removed = false;
     new_p_association->value = value;
     new_p_association->key = this->next_key++;
+
     
     list_push_back(&this->content, &new_p_association->elem);
 

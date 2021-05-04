@@ -233,6 +233,9 @@ process_wait (int child_id)
     sema_down(&process->wait_sema);
 
   status = process->exit_status;
+  // Känns som att detta bör tas bort i cleanup?
+  // Tas nu bara bort när wait kallas :S
+  plist_remove(&plist, child_id);
 
   debug("%s#%d: process_wait(%d) RETURNS %d\n",
         cur->name, cur->tid, child_id, status);
@@ -296,6 +299,8 @@ process_cleanup (void)
     sema_up(&this_process->wait_sema);
     // Ta bort efter delad data är färdig använd
     // plist_remove(&plist, cur->pid);
+
+    // if(this_process->exited == true && this_process->removed = false)
   }
   
 

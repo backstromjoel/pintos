@@ -72,7 +72,9 @@ syscall_handler (struct intr_frame *f)
 
     case SYS_EXIT: // 1
     {
-      f->eax = esp[1];
+      pinfo process = plist_find(&plist, thread_current()->pid);
+      process->exited = true;
+      process->exit_status = 0;
       thread_exit();
       return;
     }
