@@ -14,8 +14,8 @@ pid_t plist_insert(struct plist* this, const pinfo value)
 {
     struct p_association* new_p_association = (struct p_association*)malloc(sizeof(struct p_association));
     sema_init(&value->wait_sema, 0);
+    value->parent_exited = false;
     value->exited = false;
-    value->removed = false;
     new_p_association->value = value;
     new_p_association->key = this->next_key++;
 
@@ -78,6 +78,7 @@ void plist_for_each(struct plist* this, void (*exec)(pid_t, pinfo, int aux), int
         (*exec)(a->key, a->value, aux);
     }
 }
+
 
 static void print_value_struct(pid_t key, pinfo value, int aux UNUSED)
 {

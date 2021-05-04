@@ -48,8 +48,8 @@ struct process_information
   pid_t parent;
   int exit_status;
   struct semaphore wait_sema;
+  bool parent_exited;
   bool exited;
-  bool removed;
 };
 
 struct p_association

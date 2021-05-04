@@ -230,9 +230,10 @@ process_wait (int child_id)
   
   // Wait for child to finish
   if(process != NULL)
+  {
     sema_down(&process->wait_sema);
-
-  status = process->exit_status;
+    status = process->exit_status;
+  }
   // Känns som att detta bör tas bort i cleanup?
   // Tas nu bara bort när wait kallas :S
   plist_remove(&plist, child_id);
@@ -254,6 +255,19 @@ process_wait (int child_id)
    or initialized to something sane, or else that any such situation
    is detected.
 */
+
+/* Helper function for cleaning up processes */
+void cleanup_help(pid_t, pinfo, int);
+void cleanup_help(pid_t key, pinfo child, int parent_id)
+{
+  if (child->parent == (pid_t)parent_id)
+  {
+    child->parent_exited = true;
+    if(child->exited)
+      plist_remove(&plist, key);
+  }
+}
+
 void
 process_cleanup (void)
 {
@@ -297,10 +311,23 @@ process_cleanup (void)
   if(this_process != NULL)
   {
     sema_up(&this_process->wait_sema);
-    // Ta bort efter delad data är färdig använd
-    // plist_remove(&plist, cur->pid);
 
-    // if(this_process->exited == true && this_process->removed = false)
+    // Om föräldern är exited är det okej att ta bort mig själv
+    // Om inte, vill jag leva kvar för att föräldern kan behöva min status
+    if(this_process->parent_exited)
+    {
+      plist_remove(&plist, cur->pid);
+    }
+    else // if(!this_process->parent_exited) 
+    {
+      this_process->exited = true;
+      // Loopa igenom barn och säg att jag är exited, om barnet är exited, ta bort
+      plist_for_each(&plist, cleanup_help, cur->pid);
+    }
+
+    // Kan jag ta bort min egen rad?
+    // måste veta om föräldern lever, behåll då raden.
+    // Föräldern måste då ta bort barnet om barnet är färdig, annars markera att den är klar.
   }
   
 

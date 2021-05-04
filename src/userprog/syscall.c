@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 
 #include "userprog/flist.h"
+#include "devices/timer.h"
 
 /* header files you probably need, they are not used yet */
 #include <string.h>
@@ -74,7 +75,7 @@ syscall_handler (struct intr_frame *f)
     {
       pinfo process = plist_find(&plist, thread_current()->pid);
       process->exited = true;
-      process->exit_status = 0;
+      process->exit_status = esp[1];
       thread_exit();
       return;
     }
@@ -270,10 +271,11 @@ syscall_handler (struct intr_frame *f)
       return;
     }
 
-    // case SYS_SLEEP: // 13
-    // {
-    //   return;
-    // }
+    case SYS_SLEEP: // 13
+    {
+      timer_msleep(esp[1]);
+      return;
+    }
   }
 }
 
