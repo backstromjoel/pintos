@@ -14,12 +14,8 @@ pid_t plist_insert(struct plist* this, const pinfo value)
 {
     struct p_association* new_p_association = (struct p_association*)malloc(sizeof(struct p_association));
     sema_init(&value->wait_sema, 0);
-    value->parent_exited = false;
-    value->exited = false;
     new_p_association->value = value;
     new_p_association->key = this->next_key++;
-
-    
     list_push_back(&this->content, &new_p_association->elem);
 
     return new_p_association->key;
@@ -82,9 +78,9 @@ void plist_for_each(struct plist* this, void (*exec)(pid_t, pinfo, int aux), int
 
 static void print_value_struct(pid_t key, pinfo value, int aux UNUSED)
 {
-    printf("PROCESS ID: %d\nName: %s\nParent ID: %d\nExit_status: %d\n", 
-            key, value->name, value->parent, value->exit_status);
-    printf("--------------------------------------\n");
+    printf("PROCESS ID: %d\nName: %s\nParent ID: %d\nExit_status: %d\nParent_exited: %d\nExited: %d\n", 
+            key, value->name, value->parent, value->exit_status, value->parent_exited, value->exited);
+    printf("-----------------------------------------------\n");
 }
 
 void plist_printf(struct plist* this)

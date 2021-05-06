@@ -152,6 +152,7 @@ syscall_handler (struct intr_frame *f)
       int length = esp[3];
       int read = 0;
 
+
       // To Screen
       if(fd == STDOUT_FILENO)
       {
@@ -160,7 +161,7 @@ syscall_handler (struct intr_frame *f)
       }
 
       // From Keyboard
-      else if(fd == STDIN_FILENO)
+      else if(fd == STDIN_FILENO && buf != NULL)
       {
         // Kanske ska vänta på enter? och hantera backspace?
         for(int i = 0; i < length; i++)
@@ -178,7 +179,7 @@ syscall_handler (struct intr_frame *f)
       else
       {
         struct file* file = map_find(&(thread_current()->fmap), fd);
-        if(file == NULL)
+        if(file == NULL || buf == NULL)
         {
           f->eax = -1;
           return;

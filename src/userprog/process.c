@@ -160,26 +160,26 @@ start_process (struct parameters_to_start_process* parameters)
         thread_current()->tid,
         success);
 
-  pinfo process_info = (pinfo)malloc(sizeof(struct process_information));
-  process_info->name = (char*)malloc(sizeof(file_name));
-  strlcpy(process_info->name, file_name, sizeof(file_name));
-  process_info->parent = parameters->parent_pid;
-  process_info->exit_status = -1;
-
   if (success)
   {
     /* We managed to load the new program to a process, and have
        allocated memory for a process stack. The stack top is in
        if_.esp, now we must prepare and place the arguments to main on
        the stack. */
+  
+    pinfo process_info = (pinfo)malloc(sizeof(struct process_information));
+    process_info->name = (char*)malloc(sizeof(file_name));
+    strlcpy(process_info->name, file_name, sizeof(file_name));
+    process_info->parent = parameters->parent_pid;
+    process_info->exit_status = 0;
+    process_info->parent_exited = false;
+    process_info->exited = false;
 
     if_.esp = setup_main_stack(parameters->command_line, if_.esp);
 
-    process_info->exit_status = 0;
+    parameters->pid = plist_insert(&plist, process_info);
+    thread_current()->pid = parameters->pid;
   }
-
-  parameters->pid = plist_insert(&plist, process_info);
-  thread_current()->pid = parameters->pid;
 
   debug("%s#%d: start_process(\"%s\") DONE\n",
         thread_current()->name,
@@ -257,8 +257,8 @@ process_wait (int child_id)
 */
 
 /* Helper function for cleaning up processes */
-void cleanup_help(pid_t, pinfo, int);
-void cleanup_help(pid_t key, pinfo child, int parent_id)
+static void cleanup_help(pid_t, pinfo, int);
+static void cleanup_help(pid_t key, pinfo child, int parent_id)
 {
   if (child->parent == (pid_t)parent_id)
   {
@@ -274,6 +274,7 @@ process_cleanup (void)
   struct thread  *cur = thread_current ();
   uint32_t       *pd  = cur->pagedir;
   int status = -1;
+  pinfo this_process = plist_find(&plist, cur->pid);
   
   debug("%s#%d: process_cleanup() ENTERED\n", cur->name, cur->tid);
   
@@ -284,8 +285,8 @@ process_cleanup (void)
    * that may sometimes poweroff as soon as process_wait() returns,
    * possibly before the printf is completed.)
    */
-  pinfo this_process = plist_find(&plist, cur->pid);
-  status = this_process->exit_status;
+  if(this_process != NULL)
+    status = this_process->exit_status;
 
   printf("%s: exit(%d)\n", thread_name(), status);
   
