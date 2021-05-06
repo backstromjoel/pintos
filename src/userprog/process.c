@@ -171,13 +171,13 @@ start_process (struct parameters_to_start_process* parameters)
     process_info->name = (char*)malloc(sizeof(file_name));
     strlcpy(process_info->name, file_name, sizeof(file_name));
     process_info->parent = parameters->parent_pid;
-    process_info->exit_status = 0;
+    process_info->exit_status = -1;
     process_info->parent_exited = false;
     process_info->exited = false;
 
     if_.esp = setup_main_stack(parameters->command_line, if_.esp);
 
-    parameters->pid = plist_insert(&plist, process_info);
+    parameters->pid = plist_insert(&plist, process_info); 
     thread_current()->pid = parameters->pid;
   }
 
@@ -234,8 +234,7 @@ process_wait (int child_id)
     sema_down(&process->wait_sema);
     status = process->exit_status;
   }
-  // Känns som att detta bör tas bort i cleanup?
-  // Tas nu bara bort när wait kallas :S
+
   plist_remove(&plist, child_id);
 
   debug("%s#%d: process_wait(%d) RETURNS %d\n",
@@ -311,8 +310,6 @@ process_cleanup (void)
 
   if(this_process != NULL)
   {
-    sema_up(&this_process->wait_sema);
-
     // Om föräldern är exited är det okej att ta bort mig själv
     // Om inte, vill jag leva kvar för att föräldern kan behöva min status
     if(this_process->parent_exited)
@@ -329,6 +326,8 @@ process_cleanup (void)
     // Kan jag ta bort min egen rad?
     // måste veta om föräldern lever, behåll då raden.
     // Föräldern måste då ta bort barnet om barnet är färdig, annars markera att den är klar.
+
+    sema_up(&this_process->wait_sema);
   }
   
 
