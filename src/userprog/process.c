@@ -177,7 +177,7 @@ start_process (struct parameters_to_start_process* parameters)
 
     if_.esp = setup_main_stack(parameters->command_line, if_.esp);
 
-    parameters->pid = plist_insert(&plist, process_info); 
+    parameters->pid = plist_insert(&plist, process_info);
     thread_current()->pid = parameters->pid;
   }
 

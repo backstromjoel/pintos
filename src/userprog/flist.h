@@ -69,6 +69,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "threads/malloc.h"
+#include "threads/synch.h"
 #include "../lib/kernel/list.h"
 
 

@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "process.h": "c",
-        "plist.h": "c"
+        "plist.h": "c",
+        "filesys.h": "c"
     }
 }

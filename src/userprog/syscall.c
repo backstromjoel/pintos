@@ -97,8 +97,6 @@ syscall_handler (struct intr_frame *f)
       char* file_name = (char*)esp[1];
       int file_size = esp[2];
 
-      printf("Creating file: %s, with size: %d\n", file_name, file_size);
-
       f->eax = filesys_create(file_name, file_size);
 
       return;
