@@ -24,12 +24,18 @@ struct dir_entry
     bool in_use;                        /* In use or free? */
   };
 
+
+void
+dir_init(void)
+{
+  lock_init(&dir_lock);
+}
+
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
 dir_create (disk_sector_t sector, size_t entry_cnt) 
 {
-  lock_init(&dir_lock);
   // Synkroniserad i inode.c
   return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
 }
@@ -104,6 +110,7 @@ lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
     if (e.in_use && !strcmp (name, e.name)) 
@@ -114,6 +121,7 @@ lookup (const struct dir *dir, const char *name,
           *ofsp = ofs;
         return true;
       }
+
   return false;
 }
 
@@ -130,11 +138,12 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+  lock_acquire(&dir_lock);
   if (lookup (dir, name, &e, NULL))
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
-
+  lock_release(&dir_lock);
   return *inode != NULL;
 }
 
@@ -158,6 +167,8 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
   if (*name == '\0' || strlen (name) > NAME_MAX)
     return false;
 
+  lock_acquire(&dir_lock);
+
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
@@ -169,8 +180,6 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
      inode_read_at() will only return a short read at end of file.
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
-
-  lock_acquire(&dir_lock);
 
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
@@ -238,14 +247,19 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
 
+  lock_acquire(&dir_lock);
+
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
       if (e.in_use)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
+          lock_release(&dir_lock);
           return true;
         } 
     }
+
+  lock_release(&dir_lock);
   return false;
 }
