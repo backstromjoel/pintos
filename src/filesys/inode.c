@@ -133,6 +133,7 @@ inode_open (disk_sector_t sector)
     {
       inode = list_entry (e, struct inode, elem);
       if (inode->sector == sector) {
+          inode_reopen (inode);
           lock_release(&inode_list_lock);
           return inode; 
         }
@@ -199,30 +200,28 @@ inode_close (struct inode *inode)
     
   // FRÅGA OM HJÄLP HÄR
   lock_acquire(&inode_list_lock);
-
   lock_acquire(&inode->inode_close_lock);
 
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
-      // lock_acquire(&inode_list_lock);
       /* Remove from inode list. */
       list_remove (&inode->elem);
       
       /* Deallocate blocks if the file is marked as removed. */
       if (inode->removed) 
-        {
-          free_map_release (inode->sector, 1);
-          free_map_release (inode->data.start,
-                            bytes_to_sectors (inode->data.length)); 
-        }
+      {
+        free_map_release (inode->sector, 1);
+        free_map_release (inode->data.start,
+                          bytes_to_sectors (inode->data.length)); 
+      }
 
       lock_release(&inode->inode_close_lock);
       free (inode);
-
       lock_release(&inode_list_lock);
       return;
     }
+
     lock_release(&inode->inode_close_lock);
     lock_release(&inode_list_lock);
 }
@@ -245,9 +244,9 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
 {
-  // lock_acquire(&inode->read_write_lock);
-  // inode->reader_cnt++;
-  // lock_release(&inode->read_write_lock);
+  lock_acquire(&inode->read_write_lock);
+  inode->reader_cnt++;
+  lock_release(&inode->read_write_lock);
   
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
@@ -298,10 +297,10 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   free (bounce);
 
 
-  // lock_acquire(&inode->read_write_lock);
-  // inode->reader_cnt--;
-  // cond_signal(&inode->read_write_cond, &inode->read_write_lock);
-  // lock_release(&inode->read_write_lock);
+  lock_acquire(&inode->read_write_lock);
+  inode->reader_cnt--;
+  cond_signal(&inode->read_write_cond, &inode->read_write_lock);
+  lock_release(&inode->read_write_lock);
 
   return bytes_read;
 }
