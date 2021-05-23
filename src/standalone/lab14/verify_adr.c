@@ -2,6 +2,9 @@
 #include "pagedir.h"
 #include "thread.h"
 
+
+#include <stdio.h>
+
 /* verfy_*_lenght are intended to be used in a system call that accept
  * parameters containing suspisious (user mode) adresses. The
  * operating system (executng the system call in kernel mode) must not
@@ -18,13 +21,20 @@
  *
  *  gcc -Wall -Wextra -std=gnu99 -pedantic -m32 -g pagedir.o verify_adr.c
  */
-#error Read comment above and then remove this line.
 
 /* Verify all addresses from and including 'start' up to but excluding
  * (start+length). */
 bool verify_fix_length(void* start, int length)
 {
-  // ADD YOUR CODE HERE
+  int cur_page  = pg_no(start);
+  int last_page = pg_no((void *)((int)start + length - 1)); 
+
+  for (; cur_page <= last_page; ++cur_page) {
+    if (pagedir_get_page(thread_current()->pagedir, (void *)(cur_page * PGSIZE)) == NULL) 
+      return false;
+  }
+
+  return true;
 }
 
 /* Verify all addresses from and including 'start' up to and including
@@ -33,7 +43,18 @@ bool verify_fix_length(void* start, int length)
  */
 bool verify_variable_length(char* start)
 {
-  // ADD YOUR CODE HERE
+  printf("hello");
+  if (pagedir_get_page(thread_current()->pagedir, start) == NULL)
+      return false;
+
+  while (!is_end_of_string(start)) {
+    if (pagedir_get_page(thread_current()->pagedir, start) == NULL)
+      return false;
+
+    ++start;
+  }
+
+  return true;
 }
 
 /* Definition of test cases. */
@@ -67,6 +88,7 @@ int main(int argc, char* argv[])
   }
   thread_init();
   
+  
   /* Test the algorithm with a given intervall (a buffer). */
   for (i = 0; i < TEST_CASE_COUNT; ++i)
   {
@@ -80,11 +102,14 @@ int main(int argc, char* argv[])
    * terminating null-character).
    */
   for (i = 0; i < TEST_CASE_COUNT; ++i)
-  {
+  { 
+    // OSKAR: FUNGERAR INTE, FASTNAR I START_EVALUTE_ALGORITHM men bara i denna loopen.
+    // Fungerar fint  för fixed length (trots att det inte är den funktionen som failar).
     start_evaluate_algorithm(test_case[i].start, test_case[i].length);
     result = verify_variable_length(test_case[i].start);
-    evaluate(result);    
+    evaluate(result);
     end_evaluate_algorithm();
   }
+
   return 0;
 }
