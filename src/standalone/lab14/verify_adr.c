@@ -1,11 +1,7 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include "pagedir.h"
 #include "thread.h"
-
-
-#include <stdio.h>
-
-#define INCVOIDPTR(x) x = (void *)((char *)x + 1)
 
 /* verfy_*_lenght are intended to be used in a system call that accept
  * parameters containing suspisious (user mode) adresses. The
@@ -26,7 +22,7 @@
 
 /* Verify all addresses from and including 'start' up to but excluding
  * (start+length). */
-bool verify_fix_length(void* start, int length)
+bool verify_fix_length(void* start, unsigned length)
 {
   int last_page = pg_no((void *)((int)start + length - 1)); 
 
@@ -34,7 +30,6 @@ bool verify_fix_length(void* start, int length)
     if (pagedir_get_page(thread_current()->pagedir, (void *)(cur_page * PGSIZE)) == NULL) 
       return false;
   }
-
   return true;
 }
 
@@ -44,31 +39,22 @@ bool verify_fix_length(void* start, int length)
  */
 bool verify_variable_length(char* start)
 {
-  char *cur_page = start;
+  if(pagedir_get_page(thread_current()->pagedir, start) == NULL)
+    return false;
+ 
+  char *cur = start;
+  unsigned prev_pg = pg_no(cur);
 
-  /* Iterates over pages given its validity and checks for end of string identifier.
-   * For the firrst page we do not want to round down since there may be an end of string
-   * not beloning to us before our given start address. 
-   */
-  while ((cur_page = pagedir_get_page(thread_current()->pagedir, (void *)cur_page)) != NULL) {
-    int end_of_page = (int)cur_page + PGSIZE;
-    for (; (int)cur_page < end_of_page; ++cur_page) /* Not sure if int cast is necessary. */
-      if (is_end_of_string(cur_page)) 
-        return true;
+  while(!is_end_of_string(cur))
+  {
+    prev_pg = pg_no(cur++);
 
-    ++cur_page;
+    if(pg_no(cur) != prev_pg)
+      if(pagedir_get_page(thread_current()->pagedir, cur) == NULL)
+        return false;
   }
-#if 0
-  while ((cur_page = pagedir_get_page(thread_current()->pagedir, (void *)cur_page)) != NULL) {
-    int end_of_page = (int)cur_page + PGSIZE;
-    for (; (int)cur_page < end_of_page; ++cur_page) /* Not sure if int cast is necessary. */
-      if (is_end_of_string(cur_page)) 
-        return true;
 
-    ++cur_page;
-  }
-#endif
-  return false;
+  return true;
 }
 
 /* Definition of test cases. */
@@ -101,30 +87,26 @@ int main(int argc, char* argv[])
     simulator_set_pagefault_time( atoi(argv[1]) );
   }
   thread_init();
-  
-  
-  // /* Test the algorithm with a given intervall (a buffer). */
-  // for (i = 0; i < TEST_CASE_COUNT; ++i)
-  // {
-  //   start_evaluate_algorithm(test_case[i].start, test_case[i].length);
-  //   result = verify_fix_length(test_case[i].start, test_case[i].length);
-  //   evaluate(result);
-  //   end_evaluate_algorithm();
-  // }
+
+  /* Test the algorithm with a given intervall (a buffer). */
+
+  for (i = 0; i < TEST_CASE_COUNT; ++i)
+  {
+    start_evaluate_algorithm(test_case[i].start, test_case[i].length);
+    result = verify_fix_length(test_case[i].start, test_case[i].length);
+    evaluate(result);
+    end_evaluate_algorithm();
+  }
 
   /* Test the algorithm with a C-string (start address with
    * terminating null-character).
    */
   for (i = 0; i < TEST_CASE_COUNT; ++i)
-  { 
-    // OSKAR: FUNGERAR INTE, FASTNAR I START_EVALUTE_ALGORITHM men bara i denna loopen.
-    // Fungerar fint för fixed length (trots att det inte är den funktionen som failar).
-   
+  {
     start_evaluate_algorithm(test_case[i].start, test_case[i].length);
     result = verify_variable_length(test_case[i].start);
     evaluate(result);
     end_evaluate_algorithm();
   }
-
   return 0;
 }
