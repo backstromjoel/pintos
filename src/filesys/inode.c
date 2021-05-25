@@ -198,15 +198,18 @@ inode_close (struct inode *inode)
   if (inode == NULL)
     return;
     
-  // FRÅGA OM HJÄLP HÄR
   lock_acquire(&inode_list_lock);
   lock_acquire(&inode->inode_close_lock);
 
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
+
       /* Remove from inode list. */
       list_remove (&inode->elem);
+
+      lock_release(&inode->inode_close_lock);
+      lock_release(&inode_list_lock);
       
       /* Deallocate blocks if the file is marked as removed. */
       if (inode->removed) 
@@ -216,9 +219,7 @@ inode_close (struct inode *inode)
                           bytes_to_sectors (inode->data.length)); 
       }
 
-      lock_release(&inode->inode_close_lock);
       free (inode);
-      lock_release(&inode_list_lock);
       return;
     }
 
@@ -321,9 +322,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   lock_acquire(&inode->read_write_lock);
 
   while(inode->reader_cnt > 0)
-  {
     cond_wait(&inode->read_write_cond, &inode->read_write_lock);
-  }
 
   while (size > 0) 
     {

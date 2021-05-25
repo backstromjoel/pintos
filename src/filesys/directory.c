@@ -192,9 +192,9 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
-  lock_release(&dir_lock);
 
  done:
+  lock_release(&dir_lock);
   return success;
 }
 
@@ -228,14 +228,14 @@ dir_remove (struct dir *dir, const char *name)
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
     goto done;
 
+
   /* Remove inode. */
   inode_remove (inode);
   success = true;
 
  done:
-  inode_close (inode);
-  
   lock_release(&dir_lock);
+  inode_close (inode);
   return success;
 }
 
