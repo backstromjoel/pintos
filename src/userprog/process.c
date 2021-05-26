@@ -233,9 +233,9 @@ process_wait (int child_id)
   {
     sema_down(&process->wait_sema);
     status = process->exit_status;
+    plist_remove(&plist, child_id); // OM NÅGOT GÅR ÅT HELVET ESÅ KJaN DETTA VA FELET
   }
 
-  plist_remove(&plist, child_id);
 
   debug("%s#%d: process_wait(%d) RETURNS %d\n",
         cur->name, cur->tid, child_id, status);

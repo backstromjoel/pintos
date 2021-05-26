@@ -19,6 +19,8 @@
 
 static void syscall_handler (struct intr_frame *);
 
+static bool verify_fix_length(void* start, unsigned length);
+static bool verify_variable_length(char* start);
 
 void
 syscall_init (void) 
@@ -82,7 +84,10 @@ syscall_handler (struct intr_frame *f)
 
     case SYS_EXEC: // 2
     {
-      f->eax = process_execute((char*)esp[1]);
+      char* name = (char*)esp[1];
+      if(!verify_variable_length(name))
+        thread_exit();
+      f->eax = process_execute(name);
       return;
     }
 
@@ -96,6 +101,12 @@ syscall_handler (struct intr_frame *f)
     {
       char* file_name = (char*)esp[1];
       int file_size = esp[2];
+
+      if(file_name == NULL || !verify_fix_length(file_name, file_size))
+      {
+        thread_exit();
+        return;
+      }
 
       f->eax = filesys_create(file_name, file_size);
 
@@ -111,7 +122,12 @@ syscall_handler (struct intr_frame *f)
 
     case SYS_OPEN: // 6
     {
-      struct file* file = filesys_open((char*)esp[1]);
+      char* file_name = (char*)esp[1];
+
+      if(file_name == NULL || !verify_variable_length(file_name))
+        thread_exit();
+
+      struct file* file = filesys_open(file_name);
 
       if(file == NULL)
       {
@@ -150,16 +166,22 @@ syscall_handler (struct intr_frame *f)
       int length = esp[3];
       int read = 0;
 
+      if(!verify_fix_length(buf, length))
+      {
+        // Borde inte behöver returna f->eax = -1 eftersom den dör.
+        thread_exit();
+        return;
+      }
 
-      // To Screen
-      if(fd == STDOUT_FILENO)
+      // To Screen or null
+      if(fd == STDOUT_FILENO || buf == NULL)
       {
         f->eax = -1;
         return;
       }
 
       // From Keyboard
-      else if(fd == STDIN_FILENO && buf != NULL)
+      else if(fd == STDIN_FILENO)
       {
         // Kanske ska vänta på enter? och hantera backspace?
         for(int i = 0; i < length; i++)
@@ -197,12 +219,20 @@ syscall_handler (struct intr_frame *f)
       int length = esp[3];
       int written = 0;
 
-      // From Keyboard
-      if(fd == STDIN_FILENO)
+      if(!verify_fix_length(buf, length))
+      {
+        // Borde inte behöver returna f->eax = -1 eftersom den dör.
+        thread_exit();
+        return;
+      }
+
+      // From Keyboard or null
+      if(fd == STDIN_FILENO || buf == NULL)
       {
         f->eax = -1;
         return;
       }
+
 
       // To Screen
       else if(fd == STDOUT_FILENO)
@@ -260,6 +290,13 @@ syscall_handler (struct intr_frame *f)
     {
       int fd = esp[1];
       struct file* file = map_remove(&(thread_current()->fmap), fd);
+
+      if(file == NULL)
+      {
+        thread_exit();
+        return;
+      }
+
       filesys_close(file);
       return;
     }
@@ -278,3 +315,70 @@ syscall_handler (struct intr_frame *f)
   }
 }
 
+/* verfy_*_lenght are intended to be used in a system call that accept
+ * parameters containing suspisious (user mode) adresses. The
+ * operating system (executng the system call in kernel mode) must not
+ * be fooled into using (reading or writing) addresses not available
+ * to the user mode process performing the system call.
+ *
+ * In pagedir.h you can find some supporting functions that will help
+ * you dermining if a logic address can be translated into a physical
+ * addrerss using the process pagetable. A single translation is
+ * costly. Work out a way to perform as few translations as
+ * possible.
+ *
+ * Recommended compilation command:
+ *
+ *  gcc -Wall -Wextra -std=gnu99 -pedantic -m32 -g pagedir.o verify_adr.c
+ */
+
+/* Verify all addresses from and including 'start' up to but excluding
+ * (start+length). */
+bool verify_fix_length(void* start, unsigned length)
+{
+  if(!is_user_vaddr(start))
+    return false;
+
+  int last_page = pg_no((void *)((int)start + length - 1)); 
+
+  for (int cur_page = pg_no(start); cur_page <= last_page; ++cur_page) {
+    void* cur = (void *)(cur_page * PGSIZE);
+    if(!is_user_vaddr(cur))
+      return false;
+    if (pagedir_get_page(thread_current()->pagedir, cur) == NULL)
+      return false;
+  }
+  return true;
+}
+
+/* Verify all addresses from and including 'start' up to and including
+ * the address first containg a null-character ('\0'). (The way
+ * C-strings are stored.)
+ */
+bool verify_variable_length(char* start)
+{
+  if(!is_user_vaddr(start))
+    return false;
+
+  if(pagedir_get_page(thread_current()->pagedir, start) == NULL)
+    return false;
+ 
+  char *cur = start;
+
+  while(*cur != '\0')// !is_end_of_string(cur))
+  {
+    unsigned prev_pg = pg_no(cur++);
+
+
+    if(pg_no(cur) != prev_pg)
+     {
+      if(is_user_vaddr(cur))
+        return false;
+
+      if(pagedir_get_page(thread_current()->pagedir, cur) == NULL)
+        return false;
+     }
+  }
+
+  return true;
+}

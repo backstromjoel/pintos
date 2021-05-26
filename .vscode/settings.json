@@ -2,6 +2,8 @@
     "files.associations": {
         "process.h": "c",
         "plist.h": "c",
-        "filesys.h": "c"
+        "filesys.h": "c",
+        "stdio.h": "c",
+        "thread.h": "c"
     }
 }
