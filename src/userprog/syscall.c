@@ -47,11 +47,37 @@ const int argc[] = {
   0
 };
 
+static void sys_exit(int status)
+{
+  pinfo process = plist_find(&plist, thread_current()->pid);
+  process->exited = true;
+  process->exit_status = status;
+  thread_exit();
+  return;
+}
+
 static void
 syscall_handler (struct intr_frame *f) 
 {
   int32_t* esp = (int32_t*)f->esp;
 
+  if(!verify_variable_length((char*)esp))
+    sys_exit(-1);
+
+  if(esp[0] > SYS_NUMBER_OF_CALLS || esp[0] < 0)
+    sys_exit(-1);
+  
+  /*
+  for(int i = 1; i < argc[esp[0]]; i++)
+  {
+    if(!verify_variable_length((char*)(esp + i)))
+      sys_exit(-1);
+  }
+  */
+  
+
+  if(!verify_fix_length(esp, sizeof(char*) * (argc[esp[0]] + 1)))
+    sys_exit(-1); 
   
   switch ( esp[0] /* retrive syscall number */ )
   {
@@ -75,10 +101,8 @@ syscall_handler (struct intr_frame *f)
 
     case SYS_EXIT: // 1
     {
-      pinfo process = plist_find(&plist, thread_current()->pid);
-      process->exited = true;
-      process->exit_status = esp[1];
-      thread_exit();
+
+      sys_exit(esp[1]);
       return;
     }
 
@@ -104,7 +128,7 @@ syscall_handler (struct intr_frame *f)
 
       if(file_name == NULL || !verify_fix_length(file_name, file_size))
       {
-        thread_exit();
+        sys_exit(-1);
         return;
       }
 
@@ -125,7 +149,7 @@ syscall_handler (struct intr_frame *f)
       char* file_name = (char*)esp[1];
 
       if(file_name == NULL || !verify_variable_length(file_name))
-        thread_exit();
+        sys_exit(-1);;
 
       struct file* file = filesys_open(file_name);
 
@@ -169,7 +193,7 @@ syscall_handler (struct intr_frame *f)
       if(!verify_fix_length(buf, length))
       {
         // Borde inte behöver returna f->eax = -1 eftersom den dör.
-        thread_exit();
+        sys_exit(-1);
         return;
       }
 
@@ -221,13 +245,12 @@ syscall_handler (struct intr_frame *f)
 
       if(!verify_fix_length(buf, length))
       {
-        // Borde inte behöver returna f->eax = -1 eftersom den dör.
-        thread_exit();
+        sys_exit(-1);
         return;
       }
 
       // From Keyboard or null
-      if(fd == STDIN_FILENO || buf == NULL)
+      if(fd == STDIN_FILENO || buf == NULL || fd <= 0)
       {
         f->eax = -1;
         return;
@@ -293,7 +316,7 @@ syscall_handler (struct intr_frame *f)
 
       if(file == NULL)
       {
-        thread_exit();
+        sys_exit(-1);
         return;
       }
 
